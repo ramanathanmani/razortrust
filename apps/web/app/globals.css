@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+/**
+ * The palette is lifted verbatim from the deployed console at
+ * razortrust.vercel.app, so wiring it to real data changed no pixel.
+ *
+ * Semantic colour is separate from the neutral ramp on purpose: success,
+ * destructive and warning encode a verdict, and a verdict should never depend
+ * on which grey a card happens to sit on.
+ */
+:root {
+  --background: #0c0c0e;
+  --foreground: #e7e7ea;
+  --card: #151518;
+  --card-foreground: #e7e7ea;
+  --popover: #151518;
+  --popover-foreground: #e7e7ea;
+  --primary: #e7e7ea;
+  --primary-foreground: #121215;
+  --secondary: #222226;
+  --secondary-foreground: #e7e7ea;
+  --muted: #202023;
+  --muted-foreground: #8e8e95;
+  --accent: #222226;
+  --accent-foreground: #e7e7ea;
+  --destructive: #ea3c3d;
+  --destructive-foreground: #fcf3f2;
+  --success: #24c187;
+  --success-foreground: #06100b;
+  --warning: #e7b643;
+  --warning-foreground: #1e1400;
+  --border: #ffffff17;
+  --input: #ffffff21;
+  --ring: #717177;
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+  }
+}

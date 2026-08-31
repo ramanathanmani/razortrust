@@ -64,6 +64,9 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/coverage/**',
       'packages/db/generated/**',
+      // The Next.js console lints through `next lint` with its own rules; the
+      // root config has no React or JSX plugins and would only produce noise.
+      'apps/web/**',
     ],
   },
   ...tseslint.configs.recommended,

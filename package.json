@@ -21,7 +21,10 @@
     "db:guards": "npm run guards -w @razortrust/db",
     "db:reset": "npm run reset -w @razortrust/db",
     "db:verify": "npm run verify -w @razortrust/db",
-    "demo": "npm run build && npm run demo -w @razortrust/rogue-agent-demo"
+    "demo": "npm run build && npm run demo -w @razortrust/rogue-agent-demo",
+    "dev:api": "npm run dev -w @razortrust/api",
+    "dev:web": "npm run dev -w @razortrust/web",
+    "build:web": "npm run build -w @razortrust/web"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

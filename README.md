@@ -42,6 +42,16 @@ npm run db:verify
 npm run demo
 ```
 
+Then, to open the console:
+
+```bash
+npm run dev:api
+```
+
+```bash
+npm run dev:web
+```
+
 `npm test` runs 228 tests: 131 over the pure decision logic, 25 over the AI
 structuring gate, and 72 end-to-end
 against the real server, the real database and a fake gateway — a human signs a
@@ -78,6 +88,31 @@ The console (`/console`, served by the API itself) shows the same trail to a
 human, and flags when a chain was verified by replay alone rather than against
 a signed checkpoint.
 
+## The console
+
+`apps/web` is a Next.js dashboard on the real API — mandate, drift verdict,
+audit log and settlement, all read from `GET /v1/console/overview`. Nothing on
+it is mock data.
+
+Open `http://localhost:3000` with the API running and paste the
+`rzt_principal_…` token that `npm run demo` prints. The token is held in
+`sessionStorage` for the tab and never leaves the origin: the browser talks to
+`/api/*`, which Next rewrites to the Fastify service. That rewrite exists so the
+API needs no CORS — loosening CORS on a payments service to make a dashboard
+work is a bad trade.
+
+Two things the console deliberately refuses to fake:
+
+- **It reports verdicts, it never recomputes them.** The per-field match flags
+  in the drift table come from the violations on the stored verdict, so the
+  table cannot disagree with the block that was actually applied.
+- **It says when its evidence is weak.** A chain verified by replay with no
+  signed checkpoint shows an amber warning rather than an unqualified tick.
+
+`apps/api/src/routes/console.ts` still serves a plain-HTML view of the same
+audit log at `/console`. It has no build step and no dependencies, which makes
+it the thing to reach for when the question is "is the API itself healthy".
+
 ## Layout
 
 ```
@@ -85,7 +120,8 @@ packages/core        every decision that moves money — pure, deterministic, of
 packages/db          Prisma schema, audit repository, append-only guards
 packages/adapters    Razorpay and AI structuring (nothing decisive lives here)
 apps/api             Fastify service
-apps/api/routes/console.ts  the console — one self-contained page, no build step
+apps/web             the console — Next.js dashboard, real API data
+apps/api/routes/console.ts  a dependency-free debug view of the same audit log
 examples/rogue-agent a demo agent that tries to overspend and gets blocked
 ```
 
@@ -394,3 +430,4 @@ into saying.
 - [x] AI structuring adapter (Claude Opus 5, grounded + fail-closed)
 - [x] Settlement rules engine + delivery ingestion
 - [x] Console + rogue-agent demo
+- [x] Next.js console on live API data (`apps/web`)

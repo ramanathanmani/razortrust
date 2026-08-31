@@ -13,6 +13,7 @@ import { ApiError } from './errors.js';
 import { getGateway } from './gateway.js';
 import { approvalRoutes } from './routes/approve.js';
 import { auditRoutes } from './routes/audit.js';
+import { overviewRoutes } from './routes/overview.js';
 import { consoleRoutes } from './routes/console.js';
 import { intentRoutes } from './routes/intents.js';
 import { mandateRoutes } from './routes/mandates.js';
@@ -66,6 +67,7 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
   await settlementRoutes(app, config);
   await auditRoutes(app, config);
   await consoleRoutes(app, config);
+  await overviewRoutes(app, config);
   await approvalRoutes(app, config);
   // Registered last: it installs a raw-body parser, scoped to its own context.
   await app.register(async (scope) => webhookRoutes(scope, config));
