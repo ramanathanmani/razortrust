@@ -1,0 +1,17 @@
+{
+  "name": "@razortrust/adapters",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@razortrust/core": "*",
+    "zod": "^3.23.8",
+    "@anthropic-ai/sdk": "^0.122.0"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "razortrust",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RazorTrust \u00e2\u20ac\u201d an AI agent can only pay for what a human actually approved.",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "examples/*"
+  ],
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "eslint .",
+    "db:generate": "npm run generate -w @razortrust/db",
+    "db:push": "npm run push -w @razortrust/db",
+    "db:guards": "npm run guards -w @razortrust/db",
+    "db:reset": "npm run reset -w @razortrust/db",
+    "db:verify": "npm run verify -w @razortrust/db",
+    "demo": "npm run build && npm run demo -w @razortrust/rogue-agent-demo"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "eslint": "^9.9.0",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.2.0",
+    "vitest": "^2.0.5"
+  }
+}

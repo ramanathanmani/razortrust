@@ -1,0 +1,25 @@
+{
+  "name": "@razortrust/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "generate": "prisma generate",
+    "push": "prisma db push && npm run guards",
+    "guards": "node scripts/apply-guards.mjs",
+    "reset": "prisma db push --force-reset --accept-data-loss && npm run guards",
+    "studio": "prisma studio",
+    "verify": "node scripts/verify-setup.mjs",
+    "build": "tsc -b",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.19.0",
+    "@razortrust/core": "*"
+  },
+  "devDependencies": {
+    "prisma": "^5.19.0"
+  }
+}

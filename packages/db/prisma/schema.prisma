@@ -1,0 +1,573 @@
+// RazorTrust data model.
+//
+// SQLite for the MVP: zero-setup, and the whole demo runs from one file. Two
+// consequences to know about, both handled deliberately below:
+//   * Prisma has no Json or String[] scalar on SQLite, so structured columns
+//     are TEXT holding CANONICAL JSON (packages/core/canonical.ts). That is
+//     what we hash anyway, so storing the canonical form is the honest choice.
+//   * Money is BigInt paise. Never Float, never Decimal, never a rupee string.
+//
+// Moving to Postgres: change the provider and DATABASE_URL, swap the canonical
+// TEXT columns to Jsonb where useful, and re-run the guard SQL in prisma/sql.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy — the isolation boundary. Primary users are AI agent platforms, so
+// every row that matters carries a tenantId and every query is scoped by it.
+// ---------------------------------------------------------------------------
+
+model Tenant {
+  id          String   @id
+  name        String
+  /// Ed25519 SPKI PEM used to verify this tenant's audit checkpoints.
+  auditPublicKeyPem String?
+  status      String   @default("active") // active | suspended
+  createdAt   DateTime @default(now())
+
+  principals      Principal[]
+  agents          Agent[]
+  merchants       Merchant[]
+  mandates        Mandate[]
+  paymentIntents  PaymentIntent[]
+  auditEvents     AuditEvent[]
+  auditCheckpoints AuditCheckpoint[]
+  webhookEvents   WebhookEvent[]
+  idempotencyKeys IdempotencyKey[]
+
+  @@map("tenants")
+}
+
+/// The human who signs mandates. Holds the public half of the signing key.
+model Principal {
+  id        String   @id
+  tenantId  String
+  name      String
+  email     String?
+  /// Ed25519 SPKI PEM. The private half never touches this server.
+  publicKeyPem String
+  /// SHA-256 of the principal's bearer token. The token is shown once, at
+  /// creation. A stolen database yields hashes, not usable credentials.
+  apiKeyHash String  @unique
+  apiKeyPrefix String
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  mandates Mandate[]
+  approvalTokens ApprovalToken[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("principals")
+}
+
+/// The AI agent. Authenticates with an API key and holds no payment instrument.
+model Agent {
+  id         String   @id
+  tenantId   String
+  name       String
+  /// SHA-256 of the API key. The key itself is shown once, at creation.
+  apiKeyHash String   @unique
+  apiKeyPrefix String
+  status     String   @default("active") // active | disabled
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime?
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id])
+  mandates Mandate[]
+  intents  PaymentIntent[]
+
+  @@index([tenantId])
+  @@map("agents")
+}
+
+// ---------------------------------------------------------------------------
+// Merchants
+// ---------------------------------------------------------------------------
+
+model Merchant {
+  id          String   @id
+  tenantId    String
+  displayName String
+  /// Stable external identity matched EXACTLY against mandate allowlists.
+  externalRef String
+  /// Canonical JSON: quote endpoint, tracking endpoint, webhook URL, etc.
+  integrationMetadataJson String @default("{}")
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant                  @relation(fields: [tenantId], references: [id])
+  credentials MerchantApiCredential[]
+  intents     PaymentIntent[]
+  quotes      Quote[]
+
+  @@unique([tenantId, externalRef])
+  @@index([tenantId])
+  @@map("merchants")
+}
+
+/// Credentials for pulling structured quotes and tracking from a merchant.
+/// Secrets are stored encrypted; the plaintext never leaves the adapter layer.
+model MerchantApiCredential {
+  id             String   @id @default(uuid())
+  merchantId     String
+  label          String
+  kind           String // api_key | oauth2 | hmac
+  encryptedSecret String
+  /// Key-derivation / envelope metadata, canonical JSON.
+  encryptionMetaJson String @default("{}")
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  @@index([merchantId])
+  @@map("merchant_api_credentials")
+}
+
+// ---------------------------------------------------------------------------
+// Mandates — the signed human approval
+// ---------------------------------------------------------------------------
+
+model Mandate {
+  id          String   @id
+  tenantId    String
+  principalId String
+  agentId     String
+
+  status String @default("draft") // draft | active | revoked | exhausted | expired
+
+  /// The full signed terms, stored as CANONICAL JSON. This exact text is what
+  /// termsHash is computed over — do not reformat it.
+  termsJson String
+  /// sha256(canonical({domain, terms})). Re-derived and compared on every use.
+  termsHash String
+  /// Ed25519 signature over {domain, termsHash}, base64.
+  signature String?
+  signedByPublicKeyPem String?
+  signedAt  DateTime?
+
+  // Denormalised from termsJson for indexing and cheap dashboard queries.
+  // The signed terms remain the source of truth; these are never authoritative.
+  currency                 String
+  maxAmountPaise           BigInt
+  maxCumulativeAmountPaise BigInt
+  maxUses                  Int
+  notBefore                DateTime
+  notAfter                 DateTime
+
+  // Mutable consumption state, updated only inside a transaction.
+  usesCount                 Int    @default(0)
+  cumulativeAuthorizedPaise BigInt @default(0)
+
+  revokedAt DateTime?
+  revokedReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant          @relation(fields: [tenantId], references: [id])
+  principal Principal       @relation(fields: [principalId], references: [id])
+  agent     Agent           @relation(fields: [agentId], references: [id])
+  intents   PaymentIntent[]
+
+  @@index([tenantId, status])
+  @@index([agentId, status])
+  @@index([termsHash])
+  @@map("mandates")
+}
+
+// ---------------------------------------------------------------------------
+// Payment flow
+// ---------------------------------------------------------------------------
+
+model PaymentIntent {
+  id         String @id @default(uuid())
+  tenantId   String
+  mandateId  String
+  agentId    String
+  merchantId String
+
+  /// See packages/core/payment/lifecycle.ts for legal transitions.
+  state String @default("created")
+
+  /// The mandate hash as it stood when this intent was created. Compared again
+  /// at capture, so a mandate edited mid-flight cannot be captured against.
+  mandateHashAtCreate String
+  /// The hash re-checked at capture time. Set when capture is attempted.
+  mandateHashAtCapture String?
+
+  currency          String
+  /// What the agent asked for, before any quote.
+  requestedAmountPaise BigInt?
+  /// The amount actually held at the gateway.
+  authorizedAmountPaise BigInt?
+  capturedAmountPaise   BigInt?
+  refundedAmountPaise   BigInt @default(0)
+
+  blockedReasonJson String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  mandate       Mandate        @relation(fields: [mandateId], references: [id])
+  agent         Agent          @relation(fields: [agentId], references: [id])
+  merchant      Merchant       @relation(fields: [merchantId], references: [id])
+  quotes        Quote[]
+  driftChecks   DriftCheck[]
+  authorization Authorization?
+  deliveries    Delivery[]
+  settlements   Settlement[]
+  refunds       Refund[]
+  approvalTokens ApprovalToken[]
+
+  @@index([tenantId, state])
+  @@index([mandateId])
+  @@map("payment_intents")
+}
+
+/// A merchant's final quote. Kept forever, raw form included, because a drift
+/// decision is only defensible if you can show what it was made against.
+model Quote {
+  id         String @id @default(uuid())
+  intentId   String
+  merchantId String
+
+  /// merchant_api = trusted structured feed. ai_structured = messy input the
+  /// model shaped, then Zod validated. The distinction is auditable on purpose.
+  source String
+
+  /// Exactly what arrived: HTML, email text, JSON blob.
+  rawInput String?
+  /// The validated StructuredQuote, canonical JSON.
+  structuredJson String
+  /// sha256 of the canonical structured quote.
+  quoteHash String
+
+  totalPaise BigInt
+  currency   String
+
+  // Populated only when source = ai_structured.
+  aiModel      String?
+  aiConfidence Int? // 0-100, advisory only; never gates a payment
+  aiRejectedReason String?
+
+  createdAt DateTime @default(now())
+
+  intent      PaymentIntent @relation(fields: [intentId], references: [id])
+  merchant    Merchant      @relation(fields: [merchantId], references: [id])
+  driftChecks DriftCheck[]
+
+  @@index([intentId])
+  @@map("quotes")
+}
+
+/// The verdict. One row per evaluation, never updated — a re-check writes a
+/// new row so the sequence of decisions stays visible.
+model DriftCheck {
+  id       String @id @default(uuid())
+  intentId String
+  quoteId  String
+
+  decision String // allow | block
+  /// Array of violations, canonical JSON. Empty array on allow.
+  violationsJson String
+  /// Version of the rules table that produced this verdict.
+  rulesVersion String
+  /// Which gate ran this: pre_authorization | pre_capture.
+  stage String
+
+  evaluatedAt DateTime @default(now())
+
+  intent PaymentIntent @relation(fields: [intentId], references: [id])
+  quote  Quote         @relation(fields: [quoteId], references: [id])
+
+  @@index([intentId])
+  @@map("drift_checks")
+}
+
+/// The Razorpay hold. Orders are always created with capture: "manual".
+model Authorization {
+  id       String @id @default(uuid())
+  intentId String @unique
+
+  rzpOrderId   String  @unique
+  rzpPaymentId String? @unique
+  /// Recorded so we can prove the order was never auto-capture.
+  captureMode  String  @default("manual")
+
+  amountPaise BigInt
+  currency    String
+  method      String?
+
+  authorizedAt DateTime?
+  /// authorizedAt + min(mandate hours, 72). Checked SYNCHRONOUSLY before every
+  /// capture attempt; the sweeper is cleanup, not the safety mechanism.
+  captureDeadline DateTime?
+  capturedAt   DateTime?
+
+  /// Set when the hold was given up. `reason` distinguishes our own reversal
+  /// from Razorpay's 3-day auto-refund of an uncaptured payment.
+  releasedAt     DateTime?
+  releaseReason  String? // agent_requested | drift_at_capture | deadline_passed | gateway_auto_refund
+  releaseMethod  String? // reversal | gateway_expiry
+
+  failureCode    String?
+  failureMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  intent PaymentIntent @relation(fields: [intentId], references: [id])
+
+  @@index([captureDeadline])
+  @@map("authorizations")
+}
+
+/// A one-time, expiring capability to complete checkout for one intent.
+///
+/// RazorTrust holds no payment instrument, so a person has to finish the
+/// payment on the gateway's own page. This is the link they follow. It is
+/// bound to one intent AND one principal, stored only as a hash, and consumed
+/// on first use — so a leaked link is useless twice and useless late.
+model ApprovalToken {
+  id       String @id @default(uuid())
+  tenantId String
+
+  intentId    String
+  /// The principal who may use it — the mandate's owner, checked at every use.
+  principalId String
+
+  /// SHA-256 of the token. The token itself appears once, in the returned URL.
+  tokenHash String @unique
+
+  expiresAt DateTime
+  /// Set the moment it is spent. A second use is refused, not re-run.
+  usedAt    DateTime?
+  usedByIp  String?
+
+  createdAt DateTime @default(now())
+
+  intent    PaymentIntent @relation(fields: [intentId], references: [id])
+  principal Principal     @relation(fields: [principalId], references: [id])
+
+  @@index([intentId])
+  @@index([expiresAt])
+  @@map("approval_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Post-delivery
+// ---------------------------------------------------------------------------
+
+model Delivery {
+  id       String @id @default(uuid())
+  intentId String
+
+  trackingId String?
+  carrier    String?
+  status     String // in_transit | delivered | failed | returned
+
+  shippedAt   DateTime?
+  deliveredAt DateTime?
+
+  /// What actually arrived, canonical JSON, same shape as quote line items.
+  lineItemsJson String
+  /// Carrier payloads, POD references, photos. Canonical JSON.
+  rawEvidenceJson String @default("{}")
+  /// merchant_api | ai_structured, same distinction as Quote.source.
+  source String @default("merchant_api")
+
+  recordedAt DateTime @default(now())
+
+  intent      PaymentIntent @relation(fields: [intentId], references: [id])
+  settlements Settlement[]
+
+  @@index([intentId])
+  @@map("deliveries")
+}
+
+/// A recommendation, not an action. Executing it is a separate, gated step.
+model Settlement {
+  id         String @id @default(uuid())
+  intentId   String
+  deliveryId String?
+
+  recommendation String // none | full_refund | partial_refund | escalate
+  /// Only ever non-zero once the payment is captured. An uncaptured hold is
+  /// released in full instead — there is no partial release.
+  refundAmountPaise BigInt @default(0)
+  /// Rule ids and evidence behind the recommendation, canonical JSON.
+  reasonsJson  String
+  rulesVersion String
+
+  /// Set only when a human or an autoRefundAllowed mandate acts on it.
+  executedAt   DateTime?
+  executedBy   String?
+  executedRefundId String?
+
+  evaluatedAt DateTime @default(now())
+
+  intent   PaymentIntent @relation(fields: [intentId], references: [id])
+  delivery Delivery?     @relation(fields: [deliveryId], references: [id])
+
+  @@index([intentId])
+  @@map("settlements")
+}
+
+model Refund {
+  id       String @id @default(uuid())
+  intentId String
+
+  rzpRefundId String? @unique
+  amountPaise BigInt
+  /// full | partial. Partial is only legal against a captured payment.
+  kind   String
+  speed  String  @default("normal")
+  status String  @default("pending") // pending | processed | failed
+  reason String?
+
+  initiatedBy String // human | system
+  createdAt   DateTime @default(now())
+  processedAt DateTime?
+
+  intent PaymentIntent @relation(fields: [intentId], references: [id])
+
+  @@index([intentId])
+  @@map("refunds")
+}
+
+// ---------------------------------------------------------------------------
+// Audit — append-only and tamper-evident
+// ---------------------------------------------------------------------------
+
+/// Append-only. UPDATE and DELETE are blocked by triggers (prisma/sql/*.sql),
+/// and the hash chain plus signed checkpoints make any bypass detectable.
+model AuditEvent {
+  /// Chain position. Monotonic per tenant, assigned inside a transaction.
+  seq      Int
+  id       String @id @default(uuid())
+  tenantId String
+
+  actorType String // human | agent | system | gateway
+  actorId   String
+  eventType String
+
+  mandateId String?
+  intentId  String?
+
+  /// Canonical JSON. Hashed separately from the envelope.
+  payloadJson String
+
+  prevHash String
+  hash     String @unique
+
+  occurredAt DateTime
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, seq])
+  @@index([tenantId, occurredAt])
+  @@index([intentId])
+  @@index([mandateId])
+  @@map("audit_events")
+}
+
+/// A signed snapshot of the chain head. Without these, anyone who can write to
+/// audit_events can also recompute a consistent chain.
+model AuditCheckpoint {
+  id       String @id @default(uuid())
+  tenantId String
+
+  upToSeq  Int
+  headHash String
+
+  signature String
+  signedByPublicKeyPem String
+
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, upToSeq])
+  @@index([tenantId, createdAt])
+  @@map("audit_checkpoints")
+}
+
+// ---------------------------------------------------------------------------
+// Infrastructure
+// ---------------------------------------------------------------------------
+
+/// Replay protection for gateway webhooks. Razorpay retries, and a replayed
+/// `payment.captured` must not be able to advance state a second time.
+model WebhookEvent {
+  id       String @id @default(uuid())
+  tenantId String
+
+  provider String @default("razorpay")
+  /// Razorpay's `x-razorpay-event-id`. Unique per provider.
+  providerEventId String?
+  /// sha256 of the raw body — the fallback identity when no event id is sent.
+  payloadHash String
+
+  eventType String
+  rawBody   String
+
+  signatureValid Boolean
+  processedAt    DateTime?
+  processingError String?
+
+  receivedAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([provider, providerEventId])
+  @@unique([provider, payloadHash])
+  @@index([tenantId, receivedAt])
+  @@map("webhook_events")
+}
+
+/// Idempotency scoped by actor AND endpoint, not a bare column on the intent.
+/// Two different agents may legitimately reuse the same key string, and the
+/// same key against a different endpoint is a different operation.
+model IdempotencyKey {
+  id       String @id @default(uuid())
+  tenantId String
+
+  actorType String
+  actorId   String
+  endpoint  String
+  key       String
+
+  /// sha256 of the canonical request body. A key reused with a DIFFERENT body
+  /// is a client bug and gets a 409 rather than the cached response.
+  requestHash String
+
+  status         String  @default("in_progress") // in_progress | completed | failed
+  responseStatus Int?
+  responseJson   String?
+
+  /// The intent this call created, if any.
+  intentId String?
+
+  lockedAt  DateTime  @default(now())
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, actorType, actorId, endpoint, key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
