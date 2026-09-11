@@ -8,6 +8,7 @@
  */
 import {
   AnthropicQuoteStructurer,
+  DeterministicQuoteStructurer,
   FakeGateway,
   FakeQuoteStructurer,
   RazorpayGateway,
@@ -58,12 +59,21 @@ export function resetGateway(): void {
  * inventing a quote — an absent model must never become a permissive one.
  */
 export function getStructurer(config: Config): QuoteStructurer {
-  structurerSingleton ??= config.ANTHROPIC_API_KEY
-    ? new AnthropicQuoteStructurer({
+  structurerSingleton ??= (() => {
+    const useLive =
+      config.QUOTE_STRUCTURER === 'anthropic' ||
+      (config.QUOTE_STRUCTURER === 'auto' && Boolean(config.ANTHROPIC_API_KEY));
+    if (useLive) {
+      return new AnthropicQuoteStructurer({
         apiKey: config.ANTHROPIC_API_KEY,
         model: config.ANTHROPIC_MODEL,
-      })
-    : new FakeQuoteStructurer();
+      });
+    }
+    if (config.QUOTE_STRUCTURER === 'deterministic') {
+      return new DeterministicQuoteStructurer();
+    }
+    return new FakeQuoteStructurer();
+  })();
   return structurerSingleton;
 }
 

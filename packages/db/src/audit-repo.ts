@@ -232,6 +232,23 @@ export async function verifyAuditIntegrity(args: {
   const checkpoint = await getLatestCheckpoint(args.tenantId);
   const trustedKey = args.trustedPublicKeyPem ?? checkpoint?.signedByPublicKeyPem;
 
+  // The trust anchor is configured OUT OF BAND. An attacker who rewrites the
+  // log can also insert a checkpoint signed by a key they control; trusting
+  // whatever key the database itself presents would make the signature
+  // decorative. A configured anchor that does not match the signer is a fail.
+  if (
+    args.trustedPublicKeyPem &&
+    checkpoint &&
+    checkpoint.signedByPublicKeyPem !== args.trustedPublicKeyPem
+  ) {
+    return {
+      ok: false,
+      mode: 'checkpointed',
+      message:
+        'Latest audit checkpoint is signed by a key that does not match the configured trust anchor',
+    };
+  }
+
   if (checkpoint && trustedKey) {
     const subsequent = await getAuditEvents({
       tenantId: args.tenantId,

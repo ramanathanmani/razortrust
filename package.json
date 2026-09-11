@@ -21,7 +21,12 @@
     "db:guards": "npm run guards -w @razortrust/db",
     "db:reset": "npm run reset -w @razortrust/db",
     "db:verify": "npm run verify -w @razortrust/db",
-    "demo": "npm run build && npm run demo -w @razortrust/rogue-agent-demo",
+    "demo": "npm run build && npm run demo -w @razortrust/steward-agent",
+    "demo:rogue": "npm run build && npm run demo -w @razortrust/rogue-agent-demo",
+    "agent:setup": "npm run setup -w @razortrust/steward-agent",
+    "agent:once": "npm run run:once -w @razortrust/steward-agent",
+    "agent:watch": "npm run dev -w @razortrust/steward-agent",
+    "agent:test:e2e": "npm run test:e2e -w @razortrust/steward-agent",
     "dev:api": "npm run dev -w @razortrust/api",
     "dev:web": "npm run dev -w @razortrust/web",
     "build:web": "npm run build -w @razortrust/web"

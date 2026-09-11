@@ -90,7 +90,8 @@ function comparisonRows(
   ];
 }
 
-export async function overviewRoutes(app: FastifyInstance, _config: Config) {
+export async function overviewRoutes(app: FastifyInstance, config: Config) {
+  const trustedCheckpointKey = config.AUDIT_CHECKPOINT_PUBLIC_KEY_PEM || undefined;
   /**
    * Everything the console renders, for one principal.
    *
@@ -121,7 +122,10 @@ export async function overviewRoutes(app: FastifyInstance, _config: Config) {
         drift: null,
         settlement: null,
         audit: { events: [], blockedCount: 0 },
-        chain: await verifyAuditIntegrity({ tenantId: identity.tenantId }),
+        chain: await verifyAuditIntegrity({
+          tenantId: identity.tenantId,
+          ...(trustedCheckpointKey ? { trustedPublicKeyPem: trustedCheckpointKey } : {}),
+        }),
       });
     }
 
@@ -188,7 +192,10 @@ export async function overviewRoutes(app: FastifyInstance, _config: Config) {
       take: 40,
     });
 
-    const chain = await verifyAuditIntegrity({ tenantId: identity.tenantId });
+    const chain = await verifyAuditIntegrity({
+      tenantId: identity.tenantId,
+      ...(trustedCheckpointKey ? { trustedPublicKeyPem: trustedCheckpointKey } : {}),
+    });
 
     return reply.send({
       mandate: {
