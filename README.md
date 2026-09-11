@@ -53,7 +53,9 @@ supplier emails (one good, one over the price cap, one prompt-injection with
 wrong arithmetic), a human approval moment, an automated capture sweep, a short
 delivery, an agent refund attempt refused by the API, the human executing the
 partial refund, and a signed-checkpoint audit verification. Details and the
-video script: [`apps/agent/README.md`](./apps/agent/README.md).
+video script: [`apps/agent/README.md`](./apps/agent/README.md),
+[`docs/VIDEO_SCRIPT.md`](./docs/VIDEO_SCRIPT.md). Deployment, Bedrock, and
+AgentCore notes: [`docs/deployment.md`](./docs/deployment.md).
 
 ### Tests
 

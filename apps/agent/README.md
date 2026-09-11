@@ -97,6 +97,10 @@ STEWARD_MODEL=bedrock AWS_REGION=us-east-1 npm run agent:watch
 
 Delivery notes can be dropped into the mailbox directory as JSON files.
 
+Containers, persistent volumes, Amazon Bedrock IAM, and AgentCore deployment
+notes: [`docs/deployment.md`](../../docs/deployment.md). Video shot list and
+narration: [`docs/VIDEO_SCRIPT.md`](../../docs/VIDEO_SCRIPT.md).
+
 ## Tests
 
 ```bash
