@@ -1,22 +1,84 @@
-# RazorTrust
+# RazorTrust · Steward
 
 **An AI agent can only pay for what a human actually approved.**
 
-Built for the Razorpay AI Buildathon 2026.
+**Steward** is a procurement agent built with the [Strands Agents
+SDK](https://strandsagents.com): it works supplier mailboxes in the background —
+structuring quotes, placing human-completable payment holds, capturing what the
+owner approved, and checking deliveries — and only pings a human when there is a
+real decision. It can never pay outside a signed mandate, never holds a payment
+instrument, and cannot execute refunds on an ordinary mandate.
 
-The agent never holds a payment instrument. A human signs a **Mandate** once —
-price ceiling, allowed SKUs, merchant, delivery window. Before any money moves,
-plain deterministic code compares the merchant's final quote against that
-mandate and blocks on drift. Payments are short-lived authorization holds, never
-auto-capture. After delivery, a rules engine recommends refund, partial refund,
-or escalate. Every step lands in an append-only, tamper-evident log.
+A human signs a **Mandate** once — price ceiling, allowed SKUs, merchants,
+delivery window, cumulative cap. Before any money moves, deterministic code
+compares the merchant's final quote against that mandate and blocks on drift.
+Payments are short-lived **manual-capture** authorization holds. After delivery,
+a rules engine recommends refund / partial refund / escalate; executing it is a
+separate, human-gated step. Every event lands in an append-only, hash-chained,
+signed-checkpointed audit log.
 
-The AI's only job is turning messy merchant input into structured data. It never
-decides anything about money.
+The model's only latitude is *how to work* a request — the *whether it may be
+paid* answer always comes from the signed mandate.
+
+> **Provenance note.** This repository began as a Razorpay AI Buildathon
+> prototype (deterministic control plane, payment lifecycle, audit chain). The
+> autonomous **Steward agent, its Strands SDK integration, the agent runtime and
+> tool loop, the offline/WASM database toolchain, the end-to-end demo, and the
+> agent test suites were built during the AWS *Agents for Humans* hackathon
+> submission period. See [`SUBMISSION.md`](./SUBMISSION.md) for the disclosure.
 
 ---
 
 ## Quickstart
+
+```bash
+npm install
+cp .env.example packages/db/.env
+npm run db:generate && npm run db:push
+```
+
+The database toolchain is fully offline (Prisma's in-WASM query engine through a
+libSQL driver, with a verified hand-written SQLite schema) — no native engine
+download is required.
+
+### Watch the agent run a full story (~20 seconds, no credentials)
+
+```bash
+npm run build
+npm run demo
+```
+
+A narrated, end-to-end run against a real server and SQLite database: three
+supplier emails (one good, one over the price cap, one prompt-injection with
+wrong arithmetic), a human approval moment, an automated capture sweep, a short
+delivery, an agent refund attempt refused by the API, the human executing the
+partial refund, and a signed-checkpoint audit verification. Details and the
+video script: [`apps/agent/README.md`](./apps/agent/README.md),
+[`docs/VIDEO_SCRIPT.md`](./docs/VIDEO_SCRIPT.md). Deployment, Bedrock, and
+AgentCore notes: [`docs/deployment.md`](./docs/deployment.md).
+
+### Tests
+
+```bash
+npm test                                   # unit + integration (no external services)
+npm run db:verify                          # storage-layer audit checks
+npm run agent:test:e2e                     # full-server Steward E2E suite
+```
+
+### Running the agent against a live API
+
+```bash
+npm run dev:api                            # terminal 1
+npm run agent:setup                        # terminal 2: provisions + seeds mailbox
+npm run agent:watch                        # terminal 3: works the mailbox on a timer
+STEWARD_MODEL=bedrock npm run agent:watch  # same loop on Amazon Bedrock (Claude)
+```
+
+<sub>Historical quickstart continues below.</sub>
+
+---
+
+## Quickstart (control plane)
 
 ```bash
 npm install
@@ -52,21 +114,25 @@ npm run dev:api
 npm run dev:web
 ```
 
-`npm test` runs 228 tests: 131 over the pure decision logic, 25 over the AI
-structuring gate, and 72 end-to-end
-against the real server, the real database and a fake gateway — a human signs a
-mandate, a well-behaved agent gets an allow, a rogue agent is blocked five ways,
-the payment lifecycle runs through its ugly failure modes, and post-delivery
-settlement recommends refunds a human then approves.
+`npm test` runs 269 tests: the pure decision logic (131), adapters including
+the deterministic quote parser (33), the agent's hermetic Strands tool-loop
+tests (9), and 96 end-to-end API tests against the real server, the real
+database and a fake gateway — a human signs a mandate, a well-behaved agent
+gets an allow, a rogue agent is blocked five ways, the payment lifecycle runs
+through its ugly failure modes, and post-delivery settlement recommends
+refunds a human then approves. `npm run agent:test:e2e` adds 4 full-server
+Steward E2E tests covering the complete story.
 
-`npm run demo` runs the narrated end-to-end story below against a real server
-and database. `npm run db:verify` proves the storage half separately: the hash chain links
-across real inserts, a signed checkpoint verifies, and the append-only triggers
-actually refuse an `UPDATE` and a `DELETE`.
+`npm run demo` runs the narrated Steward end-to-end story (see
+[`apps/agent/README.md`](./apps/agent/README.md)) against a real server and
+database. `npm run demo:rogue` runs the earlier seven-act adversarial demo.
+`npm run db:verify` proves the storage half separately: the hash chain links
+across real inserts, a signed checkpoint verifies against the trust anchor, and
+the append-only triggers actually refuse an `UPDATE` and a `DELETE`.
 
-## The demo
+## The adversarial demo (`npm run demo:rogue`)
 
-`npm run demo` runs seven acts. Nothing is staged — every response printed is
+`npm run demo:rogue` runs seven acts. Nothing is staged — every response printed is
 what the HTTP API actually returned.
 
 1. A human signs a mandate. The agent tries to spend against the unsigned draft
@@ -95,7 +161,7 @@ audit log and settlement, all read from `GET /v1/console/overview`. Nothing on
 it is mock data.
 
 Open `http://localhost:3000` with the API running and paste the
-`rzt_principal_…` token that `npm run demo` prints. The token is held in
+`rzt_principal_…` token that `npm run demo:rogue` prints. The token is held in
 `sessionStorage` for the tab and never leaves the origin: the browser talks to
 `/api/*`, which Next rewrites to the Fastify service. That rewrite exists so the
 API needs no CORS — loosening CORS on a payments service to make a dashboard
@@ -119,10 +185,16 @@ it the thing to reach for when the question is "is the API itself healthy".
 packages/core        every decision that moves money — pure, deterministic, offline
 packages/db          Prisma schema, audit repository, append-only guards
 packages/adapters    Razorpay and AI structuring (nothing decisive lives here)
-apps/api             Fastify service
+apps/api             Fastify service — the deterministic control plane
+apps/agent           Steward — the Strands Agents SDK autonomous procurement agent
 apps/web             the console — Next.js dashboard, real API data
 apps/api/routes/console.ts  a dependency-free debug view of the same audit log
 examples/rogue-agent a demo agent that tries to overspend and gets blocked
+docs/architecture.md system, sequence, settlement and audit diagrams
+```
+
+Full architecture diagrams (system overview, payment sequence, settlement flow,
+audit chain, model swap): [`docs/architecture.md`](./docs/architecture.md).
 ```
 
 ## Architecture
@@ -431,3 +503,15 @@ into saying.
 - [x] Settlement rules engine + delivery ingestion
 - [x] Console + rogue-agent demo
 - [x] Next.js console on live API data (`apps/web`)
+- [x] **Steward: a Strands Agents SDK autonomous procurement agent (`apps/agent`)**
+- [x] 12 narrow Zod tools, one fresh Strands `Agent` per mailbox task, tool-loop FSM
+- [x] Deterministic `ScriptedModel` (Strands `Model` contract) for zero-credit demos/CI
+- [x] Amazon Bedrock model option (`STEWARD_MODEL=bedrock`)
+- [x] Narrated end-to-end demo: blocks, human approval, capture, human-gated refund, audit
+- [x] Agent unit tests + full-server E2E suite
+- [x] Offline/WASM Prisma toolchain (no native engine downloads required)
+- [x] Out-of-band checkpoint trust anchor enforced at verification
+
+## License
+
+[MIT](./LICENSE).

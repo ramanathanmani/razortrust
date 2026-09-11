@@ -37,6 +37,21 @@ const asPrincipal = { authorization: `Bearer ${principalKey}` };
 const asAgent = { authorization: `Bearer ${apiKey}` };
 const idem = () => ({ 'idempotency-key': randomUUID() });
 
+// Fixture dates are anchored to the clock so the mandate stays within its
+// validity window no matter when the suite runs.
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+const iso = (ms: number) => new Date(ms).toISOString();
+const t0 = Date.now();
+const dates = {
+  notBefore: iso(t0 - DAY),
+  notAfter: iso(t0 + 10 * DAY),
+  windowStart: iso(t0 - DAY),
+  windowEnd: iso(t0 + 7 * DAY),
+  capturedAt: iso(t0),
+  deliveryAt: iso(t0 + 3 * DAY),
+};
+
 function quote(overrides: Record<string, unknown> = {}) {
   return {
     quoteVersion: 1,
@@ -50,8 +65,8 @@ function quote(overrides: Record<string, unknown> = {}) {
     shippingPaise: '0',
     discountPaise: '0',
     totalPaise: '175000',
-    promisedDeliveryAt: '2026-09-01T00:00:00.000Z',
-    capturedAt: '2026-08-28T11:55:00.000Z',
+    promisedDeliveryAt: dates.deliveryAt,
+    capturedAt: dates.capturedAt,
     ...overrides,
   };
 }
@@ -70,9 +85,9 @@ async function newMandate() {
       maxUses: 3,
       allowedItems: [{ sku: 'SKU-KEYBOARD-MX', maxUnitPricePaise: '180000', maxQuantity: 1 }],
       allowedMerchantIds: [merchantRef],
-      deliveryWindow: { startsAt: '2026-08-29T00:00:00.000Z', endsAt: '2026-09-05T00:00:00.000Z' },
-      notBefore: '2026-08-28T00:00:00.000Z',
-      notAfter: '2026-09-04T00:00:00.000Z',
+      deliveryWindow: { startsAt: dates.windowStart, endsAt: dates.windowEnd },
+      notBefore: dates.notBefore,
+      notAfter: dates.notAfter,
       captureDeadlineHours: 72,
       autoRefundAllowed: false,
     },

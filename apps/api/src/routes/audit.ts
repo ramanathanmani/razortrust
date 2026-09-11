@@ -44,7 +44,12 @@ export async function auditRoutes(app: FastifyInstance, config: Config) {
 
   app.get('/v1/audit/verify', async (request, reply) => {
     const identity = await authenticatePrincipal(request);
-    const report = await verifyAuditIntegrity({ tenantId: identity.tenantId });
+    const report = await verifyAuditIntegrity({
+      tenantId: identity.tenantId,
+      ...(config.AUDIT_CHECKPOINT_PUBLIC_KEY_PEM
+        ? { trustedPublicKeyPem: config.AUDIT_CHECKPOINT_PUBLIC_KEY_PEM }
+        : {}),
+    });
     const checkpoint = await getLatestCheckpoint(identity.tenantId);
 
     return reply.status(report.ok ? 200 : 409).send({

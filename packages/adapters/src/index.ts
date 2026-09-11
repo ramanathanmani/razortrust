@@ -16,3 +16,4 @@ export * from './ai/prompt.js';
 export * from './ai/verify.js';
 export * from './ai/structurer.js';
 export * from './ai/fake.js';
+export * from './ai/receipt-parser.js';

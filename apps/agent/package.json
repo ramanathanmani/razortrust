@@ -1,0 +1,35 @@
+{
+  "name": "@razortrust/steward-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Steward — a Strands agent that reorders supplies in the background and can only pay inside a signed mandate.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --noEmit false --emitDeclarationOnly",
+    "dev": "tsx src/run.ts --watch",
+    "run:once": "tsx src/run.ts --once",
+    "start": "node dist/run.js",
+    "setup": "tsx src/setup.ts",
+    "demo": "tsx src/demo.ts",
+    "test": "vitest run",
+    "test:e2e": "STEWARD_E2E=1 vitest run"
+  },
+  "dependencies": {
+    "@razortrust/adapters": "*",
+    "@razortrust/api": "*",
+    "@razortrust/core": "*",
+    "@razortrust/db": "*",
+    "@strands-agents/sdk": "^1.17.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "vitest": "^2.0.5"
+  }
+}

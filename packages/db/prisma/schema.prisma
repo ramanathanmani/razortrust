@@ -11,8 +11,12 @@
 // TEXT columns to Jsonb where useful, and re-run the guard SQL in prisma/sql.
 
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/client"
+  provider        = "prisma-client-js"
+  output          = "../generated/client"
+  // Lets the client run on the in-WASM SQLite query engine via the libsql
+  // driver adapter: no native Prisma engine download is required, so the
+  // demo installs and runs in network-restricted environments.
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {

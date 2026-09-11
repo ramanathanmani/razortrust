@@ -6,20 +6,23 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "generate": "prisma generate",
-    "push": "prisma db push && npm run guards",
+    "generate": "node scripts/offline-generate.mjs",
+    "push": "node scripts/offline-push.mjs",
     "guards": "node scripts/apply-guards.mjs",
-    "reset": "prisma db push --force-reset --accept-data-loss && npm run guards",
+    "reset": "node scripts/offline-push.mjs --force-reset",
     "studio": "prisma studio",
     "verify": "node scripts/verify-setup.mjs",
-    "build": "tsc -b",
+    "build": "node scripts/offline-generate.mjs && tsc -b",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@prisma/client": "^5.19.0",
+    "@libsql/client": "^0.8.1",
+    "@prisma/adapter-libsql": "5.19.0",
+    "@prisma/client": "5.19.0",
     "@razortrust/core": "*"
   },
   "devDependencies": {
-    "prisma": "^5.19.0"
+    "@prisma/prisma-schema-wasm": "https://registry.npmjs.org/@prisma/prisma-schema-wasm/-/prisma-schema-wasm-5.19.1-2.69d742ee20b815d88e17e54db4a2a7a3b30324e3.tgz",
+    "prisma": "5.19.0"
   }
 }

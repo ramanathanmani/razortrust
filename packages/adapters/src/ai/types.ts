@@ -126,8 +126,8 @@ export interface StructureQuoteArgs {
   readonly now: Date;
 }
 
-/** Both the live structurer and the fake implement this. */
+/** The live model, the deterministic parser, and the fake implement this. */
 export interface QuoteStructurer {
-  readonly name: 'anthropic' | 'fake';
+  readonly name: 'anthropic' | 'deterministic-parser' | 'fake';
   structureQuote(args: StructureQuoteArgs): Promise<StructuringResult>;
 }

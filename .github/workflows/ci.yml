@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create local environment
+        run: cp .env.example packages/db/.env
+
+      - name: Generate Prisma client (offline/WASM toolchain)
+        run: npm run db:generate
+
+      - name: Build all packages
+        run: npm run build
+
+      - name: Push SQLite schema and append-only guards
+        run: npm run db:push
+
+      - name: Unit and integration tests
+        run: npm test
+
+      - name: Storage-layer audit verification
+        run: npm run db:verify
+
+      - name: Steward agent end-to-end suite (real server + database)
+        run: npm run test:e2e -w @razortrust/steward-agent
+
+      - name: Narrated end-to-end demo must pass
+        run: npm run demo -w @razortrust/steward-agent

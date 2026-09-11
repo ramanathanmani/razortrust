@@ -27,6 +27,15 @@ const envSchema = z.object({
 
   ANTHROPIC_API_KEY: z.string().default(''),
   ANTHROPIC_MODEL: z.string().default('claude-opus-5'),
+
+  /**
+   * Which structurer turns messy merchant text into a quote candidate.
+   *   auto          -> the live model when ANTHROPIC_API_KEY is set, else fake
+   *   deterministic -> regex parser; fully offline, still grounded + validated
+   *   anthropic     -> force the live model
+   *   fake          -> test harness; abstains unless an extraction is queued
+   */
+  QUOTE_STRUCTURER: z.enum(['auto', 'deterministic', 'anthropic', 'fake']).default('auto'),
 });
 
 export type Config = ReturnType<typeof loadConfig>;
