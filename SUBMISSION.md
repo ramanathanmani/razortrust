@@ -1,8 +1,12 @@
 # Steward — Agents for Humans hackathon submission pack
 
 Everything needed to submit, in one file. Repo: **[make public before the
-deadline]** · Track: **Everyday Agents** · License: **MIT** (detectable in the
-repo root and About).
+deadline]** · Track: **Everyday Agents** (confirmed) · License: **MIT**
+(detectable in the repo root and About).
+
+**Paste-ready Devpost fields: [`docs/DEVPOST.md`](./docs/DEVPOST.md).**
+**builder.aws bonus-post drafts (titles include "Agents for Humans" as
+required; +0.2 each, max +0.6): [`docs/blog/`](./docs/blog/).**
 
 ---
 
@@ -159,11 +163,28 @@ the earlier prototype — the autonomous agent and all SDK integration are new.
 
 ## 10. Submission checklist
 
-- [ ] Repo made **public**, MIT license detected in About
+- [ ] Repo made **public**, MIT license detected in About (LICENSE is at repo
+      root; GitHub shows it in About automatically)
 - [ ] Video ≤5 min uploaded to YouTube (unlisted), covers problem / audience /
-      why + live `npm run demo` screen recording with voiceover
-- [ ] Devpost description pasted from sections 1–5 and 8
-- [ ] Architecture diagram attached/linked (section 6)
+      why + live `npm run demo` screen recording with voiceover — script and
+      shot list: [`docs/VIDEO_SCRIPT.md`](./docs/VIDEO_SCRIPT.md)
+- [ ] Devpost fields pasted from [`docs/DEVPOST.md`](./docs/DEVPOST.md)
+      (title, tagline, long description, disclosure, tags, gallery captions)
+- [ ] Architecture diagram attached/linked (section 6; mermaid renders on
+      GitHub)
 - [ ] AWS Builder ID linked to the Devpost profile
-- [ ] $50 credit form (due Sep 11)
-- [ ] Optional: builder.aws blog post(s) (title must include “Agents for Humans”)
+- [ ] $50 credit form (due Sep 11 12pm PT)
+- [ ] Optional: publish the three drafts in [`docs/blog/`](./docs/blog) on
+      builder.aws (titles already include "Agents for Humans")
+- [ ] Optional: live deploy (container/AgentCore mapping in
+      [`docs/deployment.md`](./docs/deployment.md))
+
+## 11. Verification state (this checkout)
+
+- Clean-state install → `db:generate` → `db:push` → `build` → all tests:
+  269 tests pass; gated E2E: 13 tests pass; `db:verify` passes.
+- `npm run demo` passes end to end, audit in `mode: checkpointed`.
+- Live path also verified manually: real API server (`npm run dev:api`) +
+  `npm run agent:setup` + `npm run agent:once` over HTTP with the file mailbox
+  (1 decision, 2 blocks), idempotent re-runs do nothing.
+- GitHub Actions green on Node 20 and 22 (PR #1).

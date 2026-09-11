@@ -91,7 +91,11 @@ async function main() {
   mailbox:      ${args.mailboxDir} (3 quote emails)
   mandate:      ${scenario.mandateId}
 
-Next: npm run agent:dev (or: npm run demo:agent for the narrated in-process story)`);
+Next:
+  npm run agent:once     # work the mailbox once and exit
+  npm run agent:watch    # work it on an interval (default 60s)
+  npm run demo           # the narrated in-process story
+`);
 
   await prisma.$disconnect();
 }
