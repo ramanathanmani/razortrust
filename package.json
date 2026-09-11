@@ -9,7 +9,7 @@
     "examples/*"
   ],
   "engines": {
-    "node": ">=18.18"
+    "node": ">=20.9"
   },
   "scripts": {
     "build": "npm run build --workspaces --if-present",

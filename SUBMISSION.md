@@ -167,7 +167,9 @@ the earlier prototype — the autonomous agent and all SDK integration are new.
       root; GitHub shows it in About automatically)
 - [ ] Video ≤5 min uploaded to YouTube (unlisted), covers problem / audience /
       why + live `npm run demo` screen recording with voiceover — script and
-      shot list: [`docs/VIDEO_SCRIPT.md`](./docs/VIDEO_SCRIPT.md)
+      shot list: [`docs/VIDEO_SCRIPT.md`](./docs/VIDEO_SCRIPT.md), pre-generated
+      narration: [`docs/voiceover/`](./docs/voiceover), reference captions:
+      [`docs/demo-transcript.txt`](./docs/demo-transcript.txt)
 - [ ] Devpost fields pasted from [`docs/DEVPOST.md`](./docs/DEVPOST.md)
       (title, tagline, long description, disclosure, tags, gallery captions)
 - [ ] Architecture diagram attached/linked (section 6; mermaid renders on
