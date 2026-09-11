@@ -97,6 +97,9 @@ Point at `Chain verified to head seq 20 (mode: checkpointed)`, optionally show
 
 ## Capture notes
 
+- A pre-generated voiceover matching these timings lives in
+  [`voiceover/`](./voiceover) (seven section clips plus a concatenated full
+  track, ~4:30 total).
 - Use a 15–16pt terminal font, 1280×720 or larger.
 - Keep the terminal output color on; the ✓/✗ lines read well.
 - The demo exits 0 only when every invariant holds — run it live rather than
